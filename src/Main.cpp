@@ -12,10 +12,14 @@ int main() {
 
     auto* prog = CodeLoader::loadProgram("../res/15 Puzzle [Roger Ivie].ch8");
 
-    CodeLoader::dumpCode(prog);
+    //CodeLoader::dumpCode(prog);
 
     /*auto d = new Display64x32();
     d->printToConsole();*/
+
+    auto* mem = new Memory();
+    mem->initDigits();
+    mem->dumpMemory("../out/mem_dump");
 
     return 0;
 }

@@ -34,8 +34,10 @@ class CodeLoader {
             }
             else {
                std::cout << "read only " << bytesRead << " Bytes." << std::endl;
+               close(fd);
                throw std::system_error();
             }
+            close(fd);
         }
 
         static void dumpCode(program* code) {
