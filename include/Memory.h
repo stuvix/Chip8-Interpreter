@@ -51,7 +51,7 @@ public:
         close(fd);
     }
 
-    void dumpMemory(const char *filename) {
+    void dumpMemory(const char *filename) const {
         int fd = open(filename, O_CREAT | O_WRONLY, S_IRWXU | S_IRWXG | S_IRWXO);
         if (fd == -1) {
             std::cerr << "failed to open file for dumping of memory" << std::endl;
