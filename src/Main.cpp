@@ -18,7 +18,6 @@ static void runCode(program* prog) {
 }
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
 
     //auto* prog = CodeLoader::loadProgram("../res/15 Puzzle [Roger Ivie].ch8");
 

@@ -29,6 +29,14 @@ public:
             std::cout << line << std::endl;
         }
     }
+
+    bool addSprite(uint8_t x, uint8_t y, uint8_t* sprite, uint8_t spriteSize) {
+        bool collision = false;
+
+        std::cerr << "not yet implemented - addSprite" << std::endl; //TODO
+
+        return collision; //true if a collision happens
+    }
 };
 
 #endif //CHIP8_DISPLAY_H
