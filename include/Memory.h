@@ -13,6 +13,7 @@
 
 #define MEM_SIZE 4096
 #define FONT_FILE "../res/digits.font"
+#define FONT_LOCATION_MEMORY 0
 
 class Memory {
 public:
@@ -31,7 +32,6 @@ public:
     }
 
     void initDigits() {
-        //TODO all 16 digit sprites should be at address 0 in the 4k memory.
         int fd = open(FONT_FILE, 0);
         if (fd == -1) {
             std::cerr << "Error opening font file" << std::endl;
@@ -39,7 +39,7 @@ public:
         }
         auto* buf = new char[9];
         buf[8] = '\0';
-        for (int i = 0; i < 5*16; i++) {
+        for (int i = FONT_LOCATION_MEMORY; i < 5*16; i++) {
             if (read(fd, buf, 8) != 8) {
                 std::cerr << "read fewer bytes than expected" << std::endl;
                 close(fd);

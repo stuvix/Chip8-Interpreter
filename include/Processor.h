@@ -10,6 +10,7 @@
 #include "Display.h"
 #include "CodeLoader.h"
 #include "RegisterFile.h"
+#include "Keyboard.h"
 
 #include <boost/format.hpp>
 
@@ -25,44 +26,31 @@ private:
     program* instr{};
     RegisterFile registerFile = {0};
 
-    //void (Processor::*handlers[16])(void) = {};
-
 public:
     Processor(Display64x32* display, Memory* memory, program* instructions) {
         this->display = display;
         this->memory = memory;
         this->instr = instructions;
         this->registerFile.SP = 0; //stack starts at address 0x200, yet SP is 0 if it points to 0x200
-
-        /*this->handlers[0] = &Processor::handle0instr;
-        this->handlers[1] = &Processor::handle1instr;
-        this->handlers[2] = &Processor::handle2instr;
-        this->handlers[3] = &Processor::handle3instr;
-        this->handlers[4] = &Processor::handle4instr;
-        this->handlers[5] = &Processor::handle5instr;
-        this->handlers[6] = &Processor::handle6instr;
-        this->handlers[7] = &Processor::handle7instr;
-        this->handlers[8] = &Processor::handle8instr;
-        this->handlers[9] = &Processor::handle9instr;
-        this->handlers[0xa] = &Processor::handleAinstr;
-        this->handlers[0xb] = &Processor::handleBinstr;
-        this->handlers[0xc] = &Processor::handleCinstr;
-        this->handlers[0xd] = &Processor::handleDinstr;
-        this->handlers[0xe] = &Processor::handleEinstr;
-        this->handlers[0xf] = &Processor::handleFinstr;*/
     }
 
     void runProgam() {
+        bool terminate = false;
+        std::thread decr(&decrementPermanently, &registerFile, &terminate);
+
         while (this->registerFile.PC >= 0 && this-> registerFile.PC < this->instr->size) {
             executeInstruction();
         }
+
+        terminate = true;
+        decr.join();
         std::cout << "Regular Termination." << std::endl;
     }
 
     void executeInstruction() {
         std::cout << "Instruction: " << boost::format("%02x") % +this->instr->code[registerFile.PC] << boost::format("%02x") % +this->instr->code[registerFile.PC + 1] << " at " << this->registerFile.PC << std::dec << std::endl;
 
-        switch (this->instr->code[this->registerFile.PC >> 4]) {
+        switch (this->instr->code[this->registerFile.PC] >> 4) {
             case 0:
                 this->handle0instr();
                 break;
@@ -171,6 +159,8 @@ private:
         uint16_t newPC = lower + (higher << 8);
         this->registerFile.PC = newPC;
 
+        //std::cout << this->registerFile.PC << std::endl;
+
         this->registerFile.SP += 2; //write first, then increment
     }
 
@@ -180,11 +170,11 @@ private:
         uint8_t kk = this->instr->code[this->registerFile.PC + 1];
         if (this->registerFile.V[regNumber] == kk) {
             //skip next
-            this->registerFile.PC += 2;
+            this->registerFile.PC += 4;
         }
         else {
             //don't skip
-            this->registerFile.PC += 1;
+            this->registerFile.PC += 2;
         }
     }
 
@@ -194,11 +184,11 @@ private:
         uint8_t kk = this->instr->code[this->registerFile.PC + 1];
         if (this->registerFile.V[regNumber] != kk) {
             //skip next
-            this->registerFile.PC += 2;
+            this->registerFile.PC += 4;
         }
         else {
             //don't skip
-            this->registerFile.PC += 1;
+            this->registerFile.PC += 2;
         }
     }
 
@@ -208,11 +198,11 @@ private:
         uint8_t regNumber2 = this->instr->code[this->registerFile.PC + 1] >> 4;
         if (this->registerFile.V[regNumber1] == this->registerFile.V[regNumber2]) {
             //skip next
-            this->registerFile.PC += 2;
+            this->registerFile.PC += 4;
         }
         else {
             //don't skip
-            this->registerFile.PC += 1;
+            this->registerFile.PC += 2;
         }
     }
 
@@ -221,7 +211,7 @@ private:
         uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
         uint8_t kk = this->instr->code[this->registerFile.PC + 1];
         this->registerFile.V[regNumber] = kk;
-        this->registerFile.PC += 1;
+        this->registerFile.PC += 2;
     }
 
     void handle7instr() {
@@ -229,7 +219,7 @@ private:
         uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
         uint8_t kk = this->instr->code[this->registerFile.PC + 1];
         this->registerFile.V[regNumber] += kk;
-        this->registerFile.PC += 1;
+        this->registerFile.PC += 2;
     }
 
     void handle8instr() {
@@ -300,7 +290,7 @@ private:
             default:
                 std::cerr << "Unknown instruction" << std::endl;
         }
-        this->registerFile.PC += 1;
+        this->registerFile.PC += 2;
     }
 
     void handle9instr() {
@@ -308,10 +298,10 @@ private:
         uint8_t regNumber1 = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
         uint8_t regNumber2 = this->instr->code[this->registerFile.PC + 1] >> 4;
         if (this->registerFile.V[regNumber1] != this->registerFile.V[regNumber2]) {
-            this->registerFile.PC += 2;
+            this->registerFile.PC += 4;
         }
         else {
-            this->registerFile.PC += 1;
+            this->registerFile.PC += 2;
         }
     }
 
@@ -320,7 +310,7 @@ private:
         uint16_t i = this->instr->code[this->registerFile.PC + 1];
         i += ((uint16_t)this->instr->code[this->registerFile.PC] & 0xF) << 8;
         this->registerFile.I = i;
-        this->registerFile.PC += 1;
+        this->registerFile.PC += 2;
     }
 
     void handleBinstr() {
@@ -336,7 +326,7 @@ private:
         uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
         uint8_t kk = this->instr->code[this->registerFile.PC + 1];
         this->registerFile.V[regNumber] = ((uint8_t)random()) & kk;
-        this->registerFile.PC += 1;
+        this->registerFile.PC += 2;
     }
 
     void handleDinstr() {
@@ -350,15 +340,81 @@ private:
         else {
             this->registerFile.V[0xF] = 0;
         }
-        this->registerFile.PC += 1;
+        this->registerFile.PC += 2;
     }
 
     void handleEinstr() {
-
+        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
+        if (this->instr->code[this->registerFile.PC + 1] == 0x9e) {
+            //SKP Vx - skip if button in register is pressed
+            if (Keyboard::isPressed(this->registerFile.V[regNumber])) {
+                this->registerFile.PC += 2;
+            }
+        }
+        else if (this->instr->code[this->registerFile.PC + 1] == 0xA1) {
+            //SKNP Vx
+            if (!Keyboard::isPressed(this->registerFile.V[regNumber])) {
+                this->registerFile.PC += 2;
+            }
+        }
+        else {
+            std::cerr << "unknown instruction: E" << std::endl;
+        }
+        this->registerFile.PC += 2;
     }
 
     void handleFinstr() {
-
+        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
+        switch (this->instr->code[this->registerFile.PC + 1]) {
+            case 0x07:
+                //LD Vx, DT
+                this->registerFile.V[regNumber] = this->registerFile.DT;
+                break;
+            case 0x0A:
+                //LD Vx, K
+                this->registerFile.V[regNumber] = Keyboard::waitForKey();
+                break;
+            case 0x15:
+                //LD DT, Vx
+                this->registerFile.DT = this->registerFile.V[regNumber];
+                break;
+            case 0x18:
+                //LD ST, Vx
+                this->registerFile.ST = this->registerFile.V[regNumber];
+                break;
+            case 0x1E:
+                //ADD I, Vx
+                this->registerFile.I += this->registerFile.V[regNumber];
+                break;
+            case 0x29:
+                //LD F, Vx - loads the location of sprite Vx into I
+                if (this->registerFile.V[regNumber] > 15) {
+                    throw std::out_of_range(&"no font for number " [ +this->registerFile.V[regNumber]]);
+                }
+                this->registerFile.I = this->registerFile.V[regNumber] * 5;
+                break;
+            case 0x33: {
+                //LC B, Vx - load BCD repr of VX into memory at location I, I+1, I+2
+                uint8_t number = this->registerFile.V[regNumber];
+                this->memory->memory[this->registerFile.I] = number / 100;
+                this->memory->memory[this->registerFile.I + 1] = (number % 100) / 10;
+                this->memory->memory[this->registerFile.I + 2] =  (number % 10);
+                break;
+            }
+            case 0x55:
+                //LD [I], Vx - store regs V0 through Vx into memory at location I
+                for (int i = 0; i <= regNumber; ++i) {
+                    this->memory->memory[this->registerFile.I + i] = this->registerFile.V[i];
+                }
+                break;
+            case 0x65:
+                //LD Vx, [I]
+                for (int i = 0; i <= regNumber; ++i) {
+                     this->registerFile.V[i] = this->memory->memory[this->registerFile.I + i];
+                }
+                break;
+        }
+        this->registerFile.PC += 2;
     }
 
 

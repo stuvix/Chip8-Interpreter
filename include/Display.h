@@ -10,11 +10,30 @@
 #include <string>
 #include <algorithm>
 
-class Display64x32 {
+#include <gtkmm/button.h>
+#include <gtkmm/window.h>
+
+
+
+class Display64x32 : public Gtk::Window{
 private:
     uint64_t array[32] = {0};
 
 public:
+    Display64x32() {
+        auto* btn = new Gtk::Button("Hello there");
+        btn->signal_clicked().connect(sigc::mem_fun(*this, &Display64x32::onButtonClicked));
+        this->add(*btn);
+        this->show_all();
+    }
+
+    ~Display64x32() {
+
+    }
+
+    void onButtonClicked() {
+        exit(23);
+    }
 
     void clear() {
         for (int i = 0; i < 32; ++i) {
