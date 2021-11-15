@@ -2,3 +2,4 @@ cmake-build-debug/*
 res/*.ch8
 .idea/*
 out/*
+res/memdump
