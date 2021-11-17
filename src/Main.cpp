@@ -1,4 +1,5 @@
 #include <iostream>
+#include <thread>
 
 #include "Memory.cpp"
 #include "CodeLoader.cpp"
@@ -6,43 +7,44 @@
 #include "../include/RegisterFile.h"
 #include "../include/Display.h"
 
-#include <gtkmm/application.h>
 
 
-static void runCode(program* prog) {
+static void runCode(program* prog, Display64x32* display) {
     auto* mem = new Memory();
-    auto* display = new Display64x32();
 
+    while (display->keyboardSingleton == nullptr) {
+        sleep(1);
+    }
 
-    auto* processor = new Processor(display, mem, prog);
+    auto* processor = new Processor(display, mem, prog, display->keyboardSingleton);
+
     processor->runProgam();
 
     processor->dumpRegisters();
+
+    delete mem;
+    exit(1);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     //TODO change to qt5 for gui?
 
     //auto* prog = CodeLoader::loadProgram("../res/15 Puzzle [Roger Ivie].ch8");
 
     //CodeLoader::dumpCode(prog);
 
-    /*auto d = new Display64x32();
-    d->printToConsole();*/
+    auto* display = new Display64x32;
 
-    /*auto* mem = new Memory();
-    mem->initDigits();
-    mem->dumpMemory("../out/mem_dump");*/
+    std::thread d = display->startDisplayThread(argc, argv);
 
     //runCode(CodeLoader::loadProgram("../res/calltest.ch8"));
     //runCode(CodeLoader::loadProgram("../res/endtest.ch8"));
     //runCode(CodeLoader::loadProgram("../res/decrtest.ch8"));
+    //runCode(CodeLoader::loadProgram("../res/presstest1.ch8"), display);
+    runCode(CodeLoader::loadProgram("../res/15 Puzzle [Roger Ivie].ch8"), display);
 
-    auto window = Gtk::Application::create("org.gtkmm.example");
+    d.join();
 
-    Display64x32 display;
-
-    window->run(display);
-
+    delete display;
     return 0;
 }

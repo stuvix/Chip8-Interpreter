@@ -17,28 +17,34 @@
 #define LOWER_MASK 0xF0
 #define HIGHER_MASK 0x0F
 
-#define STACK_START 0x200
+#define STACK_START 0x50
+#define USER_SPACE_START 0x200
 
 class Processor{
 private:
     Display64x32* display{};
     Memory* memory{};
-    program* instr{};
+    //program* instr{}; //todo, the code is in memory, starting at 0x200
+    Keyboard* keyboard;
     RegisterFile registerFile = {0};
 
 public:
-    Processor(Display64x32* display, Memory* memory, program* instructions) {
+    Processor(Display64x32* display, Memory* memory, program* instructions, Keyboard* kb) {
         this->display = display;
         this->memory = memory;
-        this->instr = instructions;
+        //this->instr = instructions;
         this->registerFile.SP = 0; //stack starts at address 0x200, yet SP is 0 if it points to 0x200
+        this->keyboard = kb;
+
+        memcpy(this->memory->memory + USER_SPACE_START, instructions->code, instructions->size);
+        registerFile.PC = USER_SPACE_START;
     }
 
     void runProgam() {
         bool terminate = false;
         std::thread decr(&decrementPermanently, &registerFile, &terminate);
 
-        while (this->registerFile.PC >= 0 && this-> registerFile.PC < this->instr->size) {
+        while (true) {
             executeInstruction();
         }
 
@@ -48,9 +54,9 @@ public:
     }
 
     void executeInstruction() {
-        std::cout << "Instruction: " << boost::format("%02x") % +this->instr->code[registerFile.PC] << boost::format("%02x") % +this->instr->code[registerFile.PC + 1] << " at " << this->registerFile.PC << std::dec << std::endl;
+        std::cout << "Instruction: " << boost::format("%02x") % +this->memory->memory[registerFile.PC] << boost::format("%02x") % +this->memory->memory[registerFile.PC + 1] << " at " << this->registerFile.PC << std::dec << std::endl;
 
-        switch (this->instr->code[this->registerFile.PC] >> 4) {
+        switch (this->memory->memory[this->registerFile.PC] >> 4) {
             case 0:
                 this->handle0instr();
                 break;
@@ -119,14 +125,14 @@ public:
 private:
 
     void handle0instr() {
-        if (this->instr->code[this->registerFile.PC] == 0) {
-            if (this->instr->code[this->registerFile.PC + 1] == 0xE0) {
+        if (this->memory->memory[this->registerFile.PC] == 0) {
+            if (this->memory->memory[this->registerFile.PC + 1] == 0xE0) {
                 //CLS
                 this->display->clear();
                 this->registerFile.PC += 2;
                 return;
             }
-            if (this->instr->code[this->registerFile.PC + 1] == 0xEE) {
+            if (this->memory->memory[this->registerFile.PC + 1] == 0xEE) {
                 //RET
                 assert(registerFile.SP < 35);
                 assert(registerFile.SP > 1); //SP is not -1 or some other overflow, and stack is not empty
@@ -136,14 +142,14 @@ private:
                 this->registerFile.PC += 2;
                 return;
             }
-            std::cerr << "Unknown instruction: " << std::hex << this->instr->code[this->registerFile.PC] << this->instr->code[this->registerFile.PC + 1] << std::dec << std::endl;
+            std::cerr << "Unknown instruction: " << std::hex << this->memory->memory[this->registerFile.PC] << this->memory->memory[this->registerFile.PC + 1] << std::dec << std::endl;
         }
     }
 
     void handle1instr() {
         //JP addr
-        uint16_t higher = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint16_t lower = this->instr->code[this->registerFile.PC + 1];
+        uint16_t higher = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint16_t lower = this->memory->memory[this->registerFile.PC + 1];
         uint16_t newPC = lower + (higher << 8);
         this->registerFile.PC = newPC;
     }
@@ -154,8 +160,8 @@ private:
         this->memory->memory[STACK_START + registerFile.SP] = getHigher(this->registerFile.PC);
         this->memory->memory[STACK_START + registerFile.SP + 1] = getLower(this->registerFile.PC); //TODO check this for endianness
 
-        uint16_t higher = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint16_t lower = this->instr->code[this->registerFile.PC + 1];
+        uint16_t higher = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint16_t lower = this->memory->memory[this->registerFile.PC + 1];
         uint16_t newPC = lower + (higher << 8);
         this->registerFile.PC = newPC;
 
@@ -166,8 +172,8 @@ private:
 
     void handle3instr() {
         //SE Vx, byte - skip if equal
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t kk = this->instr->code[this->registerFile.PC + 1];
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t kk = this->memory->memory[this->registerFile.PC + 1];
         if (this->registerFile.V[regNumber] == kk) {
             //skip next
             this->registerFile.PC += 4;
@@ -180,8 +186,8 @@ private:
 
     void handle4instr() {
         //SNE Vx, byte - skip if not equal
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t kk = this->instr->code[this->registerFile.PC + 1];
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t kk = this->memory->memory[this->registerFile.PC + 1];
         if (this->registerFile.V[regNumber] != kk) {
             //skip next
             this->registerFile.PC += 4;
@@ -194,8 +200,8 @@ private:
 
     void handle5instr() {
         //SE Vx, Vy
-        uint8_t regNumber1 = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t regNumber2 = this->instr->code[this->registerFile.PC + 1] >> 4;
+        uint8_t regNumber1 = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t regNumber2 = this->memory->memory[this->registerFile.PC + 1] >> 4;
         if (this->registerFile.V[regNumber1] == this->registerFile.V[regNumber2]) {
             //skip next
             this->registerFile.PC += 4;
@@ -208,24 +214,24 @@ private:
 
     void handle6instr() {
         //LD Vx, byte
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t kk = this->instr->code[this->registerFile.PC + 1];
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t kk = this->memory->memory[this->registerFile.PC + 1];
         this->registerFile.V[regNumber] = kk;
         this->registerFile.PC += 2;
     }
 
     void handle7instr() {
         //ADD Vx, byte
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t kk = this->instr->code[this->registerFile.PC + 1];
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t kk = this->memory->memory[this->registerFile.PC + 1];
         this->registerFile.V[regNumber] += kk;
         this->registerFile.PC += 2;
     }
 
     void handle8instr() {
-        uint8_t lastByte = this->instr->code[this->registerFile.PC + 1] & HIGHER_MASK;
-        uint8_t regNumber1 = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t regNumber2 = this->instr->code[this->registerFile.PC + 1] >> 4;
+        uint8_t lastByte = this->memory->memory[this->registerFile.PC + 1] & HIGHER_MASK;
+        uint8_t regNumber1 = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t regNumber2 = this->memory->memory[this->registerFile.PC + 1] >> 4;
         switch (lastByte) {
             case 0:
                 //LD Vx, Vy
@@ -295,8 +301,8 @@ private:
 
     void handle9instr() {
         //SNE Vx, Vy
-        uint8_t regNumber1 = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t regNumber2 = this->instr->code[this->registerFile.PC + 1] >> 4;
+        uint8_t regNumber1 = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t regNumber2 = this->memory->memory[this->registerFile.PC + 1] >> 4;
         if (this->registerFile.V[regNumber1] != this->registerFile.V[regNumber2]) {
             this->registerFile.PC += 4;
         }
@@ -307,34 +313,34 @@ private:
 
     void handleAinstr() {
         //LD I, 12bits
-        uint16_t i = this->instr->code[this->registerFile.PC + 1];
-        i += ((uint16_t)this->instr->code[this->registerFile.PC] & 0xF) << 8;
+        uint16_t i = this->memory->memory[this->registerFile.PC + 1];
+        i += ((uint16_t)this->memory->memory[this->registerFile.PC] & 0xF) << 8;
         this->registerFile.I = i;
         this->registerFile.PC += 2;
     }
 
     void handleBinstr() {
         //JP V0 + addr
-        uint16_t i = this->instr->code[this->registerFile.PC + 1];
-        i += ((uint16_t)this->instr->code[this->registerFile.PC] & 0xF) << 8;
+        uint16_t i = this->memory->memory[this->registerFile.PC + 1];
+        i += ((uint16_t)this->memory->memory[this->registerFile.PC] & 0xF) << 8;
         i += this->registerFile.V[0x0];
         this->registerFile.PC = i;
     }
 
     void handleCinstr() {
         //RND Vx, byte
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t kk = this->instr->code[this->registerFile.PC + 1];
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t kk = this->memory->memory[this->registerFile.PC + 1];
         this->registerFile.V[regNumber] = ((uint8_t)random()) & kk;
         this->registerFile.PC += 2;
     }
 
     void handleDinstr() {
         //DRW Vx, Vy, nibble
-        uint8_t regNumber1 = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        uint8_t regNumber2 = this->instr->code[this->registerFile.PC + 1] >> 4;
-        uint8_t nibble = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        if (this->display->addSprite(this->registerFile.V[regNumber1], this->registerFile.V[regNumber2], this->instr->code + this->registerFile.I, nibble)) {
+        uint8_t regNumber1 = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        uint8_t regNumber2 = this->memory->memory[this->registerFile.PC + 1] >> 4;
+        uint8_t nibble = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        if (this->display->addSprite(this->registerFile.V[regNumber1], this->registerFile.V[regNumber2], this->memory->memory + this->registerFile.I, nibble)) {
             this->registerFile.V[0xF] = 1;
         }
         else {
@@ -344,16 +350,16 @@ private:
     }
 
     void handleEinstr() {
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        if (this->instr->code[this->registerFile.PC + 1] == 0x9e) {
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        if (this->memory->memory[this->registerFile.PC + 1] == 0x9e) {
             //SKP Vx - skip if button in register is pressed
-            if (Keyboard::isPressed(this->registerFile.V[regNumber])) {
+            if (keyboard->isPressed(this->registerFile.V[regNumber])) {
                 this->registerFile.PC += 2;
             }
         }
-        else if (this->instr->code[this->registerFile.PC + 1] == 0xA1) {
+        else if (this->memory->memory[this->registerFile.PC + 1] == 0xA1) {
             //SKNP Vx
-            if (!Keyboard::isPressed(this->registerFile.V[regNumber])) {
+            if (!keyboard->isPressed(this->registerFile.V[regNumber])) {
                 this->registerFile.PC += 2;
             }
         }
@@ -364,15 +370,15 @@ private:
     }
 
     void handleFinstr() {
-        uint8_t regNumber = this->instr->code[this->registerFile.PC] & HIGHER_MASK;
-        switch (this->instr->code[this->registerFile.PC + 1]) {
+        uint8_t regNumber = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
+        switch (this->memory->memory[this->registerFile.PC + 1]) {
             case 0x07:
                 //LD Vx, DT
                 this->registerFile.V[regNumber] = this->registerFile.DT;
                 break;
             case 0x0A:
                 //LD Vx, K
-                this->registerFile.V[regNumber] = Keyboard::waitForKey();
+                this->registerFile.V[regNumber] = keyboard->waitForKey();
                 break;
             case 0x15:
                 //LD DT, Vx
