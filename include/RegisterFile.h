@@ -7,6 +7,7 @@
 
 #include <thread>
 #include <iostream>
+#include <QObject>
 
 struct RegisterFile{
     uint8_t V[16]; //usually called Vx, where x is the index into the array
@@ -17,8 +18,18 @@ struct RegisterFile{
     uint8_t SP;  //pseudo - stack located at 0x200, points to first empty slot on stack.
 };
 
-namespace decrThread {
+class decrThread: public QObject {
+    Q_OBJECT
+
+private:
+    bool soundPlaying = false;
+public:
     void decrementPermanently(RegisterFile* registers, const bool* terminate);
-}
+    void signalStartOfSound();
+
+    signals:
+    void startSound();
+    void stopSound();
+};
 
 #endif //CHIP8_REGISTERFILE_H

@@ -15,6 +15,10 @@
             if (ST != 0) {
                 __atomic_compare_exchange_n(&registers->ST, &ST, ST-1, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
             }
+            if (soundPlaying && registers->ST == 0) {
+                emit stopSound();
+                soundPlaying = false;
+            }
             auto lastOperation = std::chrono::system_clock::now();
             std::this_thread::sleep_for(std::chrono::milliseconds(1000/60));
             if (std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - lastOperation).count() < 1000 / 60) {
@@ -22,4 +26,9 @@
             }
         }
     }
+
+void decrThread::signalStartOfSound() {
+    emit startSound();
+    soundPlaying = true;
+}
 

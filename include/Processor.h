@@ -6,6 +6,7 @@
 #define CHIP8_PROCESSOR_H
 
 #include <cassert>
+#include <thread>
 #include "Memory.h"
 #include "Display.h"
 #include "CodeLoader.h"
@@ -29,6 +30,7 @@ private:
     Keyboard* keyboard; //keyboard is initialized later
     RegisterFile registerFile = {0};
     bool terminate;
+    decrThread* decrementor;
 
 public:
     Processor(Display64x32* display, Memory* memory, program* instructions) {
@@ -42,7 +44,11 @@ public:
 
     void runProgam() {
         terminate = false;
-        std::thread decr(&decrThread::decrementPermanently, &registerFile, &terminate);
+        decrementor = new decrThread();
+        std::thread decr = std::thread([this] { decrementor->decrementPermanently(&this->registerFile, &this->terminate); });
+
+        QObject::connect(decrementor, &decrThread::startSound, display, &Display64x32::playBeep);
+        QObject::connect(decrementor, &decrThread::stopSound, display, &Display64x32::stopBeep);
 
         while (display->keyboardSingleton == nullptr) {
             sleep(1);
@@ -55,6 +61,7 @@ public:
 
         terminate = true;
         decr.join();
+        delete decrementor;
         std::cout << "Regular Termination." << std::endl;
     }
 
@@ -411,6 +418,10 @@ private:
             case 0x18:
                 //LD ST, Vx
                 this->registerFile.ST = this->registerFile.V[regNumber];
+                if (this->registerFile.ST != 0) {
+                    std::cout << "starting sound" << std::endl;
+                    this->decrementor->signalStartOfSound();
+                }
                 break;
             case 0x1E:
                 //ADD I, Vx

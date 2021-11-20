@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QGridLayout>
 #include <QLabel>
+#include <QtMultimedia/QSoundEffect>
 #include "Keyboard.h"
 
 
@@ -24,6 +25,7 @@ private:
     //uint64_t array[32] = {0};
     uint8_t mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 
+    QSoundEffect beeping;
 
 public:
     Keyboard* keyboardSingleton = nullptr;
@@ -53,6 +55,11 @@ public:
         label->setPixmap(QPixmap::fromImage(*canvas));
 
         label->show();
+
+        //sound stuff
+        beeping.setSource(QUrl::fromLocalFile("../res/loop_beep.wav"));
+        beeping.setLoopCount(QSoundEffect::Infinite);
+        beeping.setVolume(0.15f);
 
         Display64x32::keyboardSingleton = window;
 
@@ -110,7 +117,13 @@ public:
         *retAndDone = collision ? 1 : 0; //true if a collision happens
     }
 
+    void playBeep() {
+        this->beeping.play();
+    }
 
+    void stopBeep() {
+        this->beeping.stop();
+    }
 };
 
 
