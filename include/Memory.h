@@ -25,6 +25,7 @@ public:
         if (!memory) {
             throw std::system_error();
         }
+        initDigits();
     }
 
     virtual ~Memory() {

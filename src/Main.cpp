@@ -14,7 +14,7 @@ static void runCode(program* prog, Display64x32* display, int argc, char* argv[]
     auto* mem = new Memory();
 
     auto* processor = new Processor(display, mem, prog);
-    
+
     qRegisterMetaType<uint8_t>("uint8_t");
     QObject::connect(processor, SIGNAL(requestClearScreen()), display, SLOT(clear()));
     QObject::connect(processor, &Processor::requestSpriteOnScreen,
@@ -32,7 +32,8 @@ static void runCode(program* prog, Display64x32* display, int argc, char* argv[]
 int main(int argc, char* argv[]) {
     auto* display = new Display64x32;
 
-    runCode(CodeLoader::loadProgram("../roms/Addition Problems [Paul C. Moews].ch8"), display, argc, argv);
+    //runCode(CodeLoader::loadProgram("../roms/Keypad Test [Hap, 2006].ch8"), display, argc, argv);
+    runCode(CodeLoader::loadProgram("../roms/keyboard_test_own.ch8"), display, argc, argv);
 
     delete display;
     return 0;

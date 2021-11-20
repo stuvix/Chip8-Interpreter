@@ -66,7 +66,7 @@ public:
     }
 
     void executeInstruction() {
-        //std::cout << "Instruction: " << boost::format("%02x") % +this->memory->memory[registerFile.PC] << boost::format("%02x") % +this->memory->memory[registerFile.PC + 1] << " at " << boost::format("%04x") % this->registerFile.PC << std::dec << std::endl;
+        std::cout << "Instruction: " << boost::format("%02x") % +this->memory->memory[registerFile.PC] << boost::format("%02x") % +this->memory->memory[registerFile.PC + 1] << " at " << boost::format("%04x") % this->registerFile.PC << std::dec << std::endl;
 
         switch (this->memory->memory[this->registerFile.PC] >> 4) {
             case 0:
@@ -119,6 +119,7 @@ public:
                 break;
 
         }
+
     }
 
     void dumpRegisters() {
