@@ -10,7 +10,7 @@
 #include "Display.h"
 #include "CodeLoader.h"
 #include "RegisterFile.h"
-#include "Keyboard.h"
+//#include "Keyboard.h"
 
 #include <boost/format.hpp>
 
@@ -20,31 +20,36 @@
 #define STACK_START 0x50
 #define USER_SPACE_START 0x200
 
-class Processor{
+class Processor : public QObject{
+    Q_OBJECT
+
 private:
     Display64x32* display{};
     Memory* memory{};
-    //program* instr{}; //todo, the code is in memory, starting at 0x200
-    Keyboard* keyboard;
+    Keyboard* keyboard; //keyboard is initialized later
     RegisterFile registerFile = {0};
+    bool terminate;
 
 public:
-    Processor(Display64x32* display, Memory* memory, program* instructions, Keyboard* kb) {
+    Processor(Display64x32* display, Memory* memory, program* instructions) {
         this->display = display;
         this->memory = memory;
-        //this->instr = instructions;
         this->registerFile.SP = 0; //stack starts at address 0x200, yet SP is 0 if it points to 0x200
-        this->keyboard = kb;
 
         memcpy(this->memory->memory + USER_SPACE_START, instructions->code, instructions->size);
         registerFile.PC = USER_SPACE_START;
     }
 
     void runProgam() {
-        bool terminate = false;
-        std::thread decr(&decrementPermanently, &registerFile, &terminate);
+        terminate = false;
+        std::thread decr(&decrThread::decrementPermanently, &registerFile, &terminate);
 
-        while (true) {
+        while (display->keyboardSingleton == nullptr) {
+            sleep(1);
+        }
+        this->keyboard = display->keyboardSingleton;
+
+        while (!terminate) {
             executeInstruction();
         }
 
@@ -54,7 +59,7 @@ public:
     }
 
     void executeInstruction() {
-        std::cout << "Instruction: " << boost::format("%02x") % +this->memory->memory[registerFile.PC] << boost::format("%02x") % +this->memory->memory[registerFile.PC + 1] << " at " << this->registerFile.PC << std::dec << std::endl;
+        //std::cout << "Instruction: " << boost::format("%02x") % +this->memory->memory[registerFile.PC] << boost::format("%02x") % +this->memory->memory[registerFile.PC + 1] << " at " << boost::format("%04x") % this->registerFile.PC << std::dec << std::endl;
 
         switch (this->memory->memory[this->registerFile.PC] >> 4) {
             case 0:
@@ -112,15 +117,19 @@ public:
     void dumpRegisters() {
         std::cout << "Registers:" << std::endl;
         for (int i = 0; i < 16; i++) {
-            std::cout << "V" << i << ": " << +this->registerFile.V[i] << std::endl;
+            std::cout << "V" << boost::format("%01x") % i << ": " << boost::format("%02x") % +this->registerFile.V[i] << std::endl;
         }
-        std::cout << "PC: " << +this->registerFile.PC <<std::endl;
-        std::cout << "SP: " << +this->registerFile.SP <<std::endl;
-        std::cout << "DT: " << +this->registerFile.DT <<std::endl;
-        std::cout << "I: " << +this->registerFile.I <<std::endl;
-        std::cout << "ST: " << +this->registerFile.ST <<std::endl;
+        std::cout << "PC: " << boost::format("%04x") % +this->registerFile.PC <<std::endl;
+        std::cout << "SP: " << boost::format("%02x") % +this->registerFile.SP <<std::endl;
+        std::cout << "DT: " << boost::format("%02x") % +this->registerFile.DT <<std::endl;
+        std::cout << "I: " << boost::format("%02x") % +this->registerFile.I <<std::endl;
+        std::cout << "ST: " << boost::format("%02x") % +this->registerFile.ST <<std::endl;
         std::cout << "End of Registers." << std::endl;
     }
+
+signals:
+    void requestClearScreen();
+    void requestSpriteOnScreen(uint8_t x, uint8_t y, const uint8_t* sprite, uint8_t spriteSize, uint8_t * retAndDone);
 
 private:
 
@@ -128,7 +137,8 @@ private:
         if (this->memory->memory[this->registerFile.PC] == 0) {
             if (this->memory->memory[this->registerFile.PC + 1] == 0xE0) {
                 //CLS
-                this->display->clear();
+                //emit this->display->clear();
+                emit requestClearScreen();
                 this->registerFile.PC += 2;
                 return;
             }
@@ -151,6 +161,12 @@ private:
         uint16_t higher = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
         uint16_t lower = this->memory->memory[this->registerFile.PC + 1];
         uint16_t newPC = lower + (higher << 8);
+        //DEBUG TODO REMOVE
+        if (this->registerFile.PC == newPC) {
+            //endless loop, terminate.
+            this->terminate = true;
+            std::cout << "Termination via 1 instruction loop." << std::endl;
+        }
         this->registerFile.PC = newPC;
     }
 
@@ -339,8 +355,16 @@ private:
         //DRW Vx, Vy, nibble
         uint8_t regNumber1 = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
         uint8_t regNumber2 = this->memory->memory[this->registerFile.PC + 1] >> 4;
-        uint8_t nibble = this->memory->memory[this->registerFile.PC] & HIGHER_MASK;
-        if (this->display->addSprite(this->registerFile.V[regNumber1], this->registerFile.V[regNumber2], this->memory->memory + this->registerFile.I, nibble)) {
+        uint8_t nibble = this->memory->memory[this->registerFile.PC + 1] & HIGHER_MASK;
+        //bool changedPixel = emit this->display->addSprite(this->registerFile.V[regNumber1], this->registerFile.V[regNumber2], this->memory->memory + this->registerFile.I, nibble);
+        uint8_t changedPixelSync = 3;
+        emit requestSpriteOnScreen(this->registerFile.V[regNumber1], this->registerFile.V[regNumber2], this->memory->memory + this->registerFile.I, nibble, &changedPixelSync);
+
+        while (changedPixelSync == 3) {
+            sched_yield(); //wait for gui to update until we continue execution
+        }
+        //std::cout << boost::format("%02x") %+registerFile.I << " " << boost::format("%02x") %+registerFile.V[0] << " " << boost::format("%02x") %+registerFile.V[1] << std::endl;
+        if (changedPixelSync == 1) {
             this->registerFile.V[0xF] = 1;
         }
         else {

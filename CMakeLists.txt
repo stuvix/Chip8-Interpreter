@@ -8,8 +8,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 
-set(SrcFiles src/Main.cpp src/Memory.cpp src/CodeLoader.cpp)
-set(Headers include/CodeLoader.h include/Memory.h include/RegisterFile.h include/Display.h include/Processor.h include/Keyboard.h)
+set(SrcFiles src/Main.cpp src/Memory.cpp src/CodeLoader.cpp src/RegisterFile.cpp)
+set(Headers include/CodeLoader.h include/Memory.h include/RegisterFile.h include/Display.h include/Processor.h include/Keyboard.h src/RegisterFile.cpp)
 
 add_executable(Chip8 ${SrcFiles} ${Headers})
 set(CMAKE_CXX_FLAGS -pthread)
